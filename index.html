@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Football Dream Team Draft - Battle Engine</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        pitch: {
+                            dark: '#0a2316',
+                            light: '#0e2f1e',
+                            line: 'rgba(255, 255, 255, 0.4)',
+                            stripe: '#0c281a'
+                        }
+                    },
+                    animation: {
+                        'pulse-glow': 'pulseGlow 2s infinite',
+                        'card-pop': 'cardPop 0.3s ease-out',
+                        'eq-bar': 'eqBar 1.2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        pulseGlow: {
+                            '0%, 100%': { boxShadow: '0 0 15px rgba(16, 185, 129, 0.6), 0 0 30px rgba(16, 185, 129, 0.2)', transform: 'scale(1)' },
+                            '50%': { boxShadow: '0 0 25px rgba(16, 185, 129, 0.9), 0 0 45px rgba(16, 185, 129, 0.4)', transform: 'scale(1.05)' }
+                        },
+                        cardPop: {
+                            '0%': { opacity: '0', transform: 'scale(0.9) translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'scale(1) translateY(0)' }
+                        },
+                        eqBar: {
+                            '0%': { height: '20%' },
+                            '100%': { height: '100%' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- FontAwesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tone.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <style>
+        /* Custom Pitch & Visual Styling */
+        .pitch-pattern {
+            background-color: #0d2e1c;
+            background-image: repeating-linear-gradient(
+                0deg,
+                #0d2e1c,
+                #0d2e1c 40px,
+                #092315 40px,
+                #092315 80px
+            );
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glass-card-hover:hover {
+            background: rgba(30, 41, 59, 0.85);
+            border-color: rgba(16, 185, 129, 0.4);
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.15);
+        }
+
+        /* FUT Player Card Styling */
+        .fut-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 2px solid #334155;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fut-card-gold {
+            background: linear-gradient(135deg, #45320c 0%, #1e1b18 50%, #634b16 100%);
+            border: 2px solid #eab308;
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.2);
+        }
+
+        .fut-card-silver {
+            background: linear-gradient(135deg, #334155 0%, #1e293b 50%, #475569 100%);
+            border: 2px solid #94a3b8;
+        }
+
+        .fut-card-special {
+            background: linear-gradient(135deg, #31103f 0%, #0f172a 50%, #581c87 100%);
+            border: 2px solid #a855f7;
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+        }
+
+        .fut-card:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #10b981;
+        }
+
+        .stat-bar-fill {
+            transition: width 1s ease-out;
+        }
+
+        .pitch-slot {
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- TOP GLOBAL HEADER / HUD -->
+    <header class="sticky top-0 z-50 glass-card border-b border-slate-800 bg-slate-950/80 backdrop-blur-md px-4 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="resetToHome()">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <i class="fa-solid fa-trophy text-slate-950 text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-display font-black text-lg sm:text-xl tracking-wider uppercase bg-gradient-to-r from-white via-slate-200 to-emerald-400 bg-clip-text text-transparent">
+                        Dream Team <span class="text-emerald-500">Draft</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium hidden sm:block">Tactical Battle Engine</p>
+                </div>
+            </div>
+
+            <!-- Active Turn & Mode HUD -->
+            <div id="hud-draft-info" class="hidden flex items-center space-x-2 sm:space-x-4">
+                <!-- Turn Indicator Badge -->
+                <div id="turn-badge" class="flex items-center space-x-2 bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border border-emerald-500/40 rounded-xl px-3 py-1.5">
+                    <span id="turn-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="turn-text" class="font-display font-bold text-xs sm:text-sm text-emerald-400">Player 1's Turn</span>
+                </div>
+
+                <!-- Mode Tag -->
+                <div class="hidden md:flex items-center space-x-1.5 bg-slate-900 border border-slate-700/60 rounded-lg px-2.5 py-1 text-xs text-slate-300 font-mono">
+                    <i class="fa-solid fa-gamepad text-emerald-400"></i>
+                    <span id="hud-game-mode-tag">Solo Mode</span>
+                </div>
+            </div>
+
+            <!-- Global Audio Anthem Toggle -->
+            <button id="anthem-toggle-btn" onclick="toggleAnthemAudio()" class="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all shadow-sm active:scale-95">
+                <div id="eq-indicator" class="hidden flex items-end space-x-0.5 h-3.5 w-3.5 mr-1">
+                    <span class="w-0.5 bg-emerald-400 rounded-full animate-eq-bar" style="animation-delay: 0.1s"></span>
+                    <span class="w-0.5 bg-emerald-400 rounded-full animate-eq-bar" style="animation-delay: 0.3s"></span>
+                    <span class="w-0.5 bg-emerald-400 rounded-full animate-eq-bar" style="animation-delay: 0.2s"></span>
+                </div>
+                <i id="anthem-icon" class="fa-solid fa-music text-emerald-400"></i>
+                <span id="anthem-btn-text" class="hidden sm:inline">Stadium Anthem</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN APP CONTAINER -->
+    <main class="flex-grow flex flex-col justify-center px-3 sm:px-6 py-6 max-w-7xl mx-auto w-full">
+
+        <!-- ================= STEP 0: GAME MODE SELECTION ================= -->
+        <section id="step-mode-select" class="space-y-6 animate-card-pop">
+            <div class="text-center max-w-2xl mx-auto space-y-2">
+                <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Game Mode</span>
+                <h2 class="font-display font-extrabold text-2xl sm:text-4xl tracking-tight">Select Game Mode</h2>
+                <p class="text-slate-400 text-sm sm:text-base">Play solo manager mode or challenge an AI Bot or friend in turn-based draft battles!</p>
+            </div>
+
+            <!-- Mode Selection Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 max-w-5xl mx-auto">
+                
+                <!-- Mode 1: Solo Manager -->
+                <div onclick="selectGameMode('solo')" class="glass-card glass-card-hover rounded-3xl p-6 cursor-pointer border border-slate-800 flex flex-col justify-between space-y-4 group">
+                    <div class="space-y-3">
+                        <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <h3 class="font-display font-black text-xl text-white group-hover:text-emerald-400">Solo Manager</h3>
+                        <p class="text-xs text-slate-400 leading-relaxed">Build your ultimate 11-player dream squad with 3 skip re-rolls and receive a detailed AI tactical breakdown.</p>
+                    </div>
+                    <div class="flex items-center text-xs font-bold text-emerald-400">
+                        <span>Start Solo Draft</span> <i class="fa-solid fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform"></i>
+                    </div>
+                </div>
+
+                <!-- Mode 2: Player vs AI (PvE) -->
+                <div onclick="selectGameMode('pve')" class="glass-card glass-card-hover rounded-3xl p-6 cursor-pointer border border-teal-500/30 bg-teal-950/20 flex flex-col justify-between space-y-4 group relative overflow-hidden">
+                    <div class="absolute top-3 right-3 px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 text-[10px] font-mono font-bold uppercase border border-teal-500/30">Popular</div>
+                    <div class="space-y-3">
+                        <div class="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-400 text-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-robot"></i>
+                        </div>
+                        <h3 class="font-display font-black text-xl text-white group-hover:text-teal-400">Player vs AI Bot (PvE)</h3>
+                        <p class="text-xs text-slate-400 leading-relaxed">Alternating turn draft against an intelligent tactical AI bot. Unleash **Steal** and **Reroll** powers in head-to-head match scoring!</p>
+                    </div>
+                    <div class="flex items-center text-xs font-bold text-teal-400">
+                        <span>Challenge AI Bot</span> <i class="fa-solid fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform"></i>
+                    </div>
+                </div>
+
+                <!-- Mode 3: Player vs Player (PvP) -->
+                <div onclick="selectGameMode('pvp')" class="glass-card glass-card-hover rounded-3xl p-6 cursor-pointer border border-purple-500/30 bg-purple-950/20 flex flex-col justify-between space-y-4 group">
+                    <div class="space-y-3">
+                        <div class="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-400 text-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <h3 class="font-display font-black text-xl text-white group-hover:text-purple-400">1v1 PvP Draft (Pass & Play)</h3>
+                        <p class="text-xs text-slate-400 leading-relaxed">Local 2-player turn-based draft battle! Out-think your friend using special abilities to steal star players and claim the trophy.</p>
+                    </div>
+                    <div class="flex items-center text-xs font-bold text-purple-400">
+                        <span>Start 1v1 PvP Battle</span> <i class="fa-solid fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform"></i>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ================= STEP 1: CLUB SELECTION ================= -->
+        <section id="step-club-select" class="hidden space-y-6 animate-card-pop">
+            <div class="text-center max-w-2xl mx-auto space-y-2">
+                <button onclick="goToStep(0)" class="inline-flex items-center space-x-1.5 text-xs font-medium text-slate-400 hover:text-emerald-400 mb-2 transition-colors">
+                    <i class="fa-solid fa-arrow-left"></i> <span>Back to Mode Select</span>
+                </button>
+                <div id="club-select-header-badge">
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Step 1 of 2</span>
+                </div>
+                <h2 id="club-select-title" class="font-display font-extrabold text-2xl sm:text-4xl tracking-tight">Select Your Club Identity</h2>
+                <p id="club-select-subtitle" class="text-slate-400 text-sm sm:text-base">Choose a legendary European football club identity.</p>
+            </div>
+
+            <!-- Clubs Grid -->
+            <div id="clubs-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pt-4">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- ================= STEP 2: FORMATION SELECTION ================= -->
+        <section id="step-formation-select" class="hidden space-y-6 animate-card-pop">
+            <div class="text-center max-w-2xl mx-auto space-y-2">
+                <button onclick="goToStep(1)" class="inline-flex items-center space-x-1.5 text-xs font-medium text-slate-400 hover:text-emerald-400 mb-2 transition-colors">
+                    <i class="fa-solid fa-arrow-left"></i> <span>Back to Clubs</span>
+                </button>
+                <div>
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Step 2 of 2</span>
+                </div>
+                <h2 id="formation-select-title" class="font-display font-extrabold text-2xl sm:text-4xl tracking-tight">Choose Tactical Formation</h2>
+                <p id="formation-select-subtitle" class="text-slate-400 text-sm sm:text-base">Select the tactical setup that best fits your strategy.</p>
+            </div>
+
+            <!-- Formation Cards Grid -->
+            <div id="formations-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 pt-4">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- ================= STEP 3: INTERACTIVE DRAFT ROOM ================= -->
+        <section id="step-draft-room" class="hidden space-y-6">
+            <!-- Draft Header HUD -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass-card p-4 rounded-2xl border border-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold font-mono">
+                        <span id="draft-current-index">1</span>
+                    </div>
+                    <div>
+                        <h3 class="font-display font-bold text-base sm:text-lg">Drafting Position: <span id="draft-target-pos" class="text-emerald-400 uppercase">GK</span></h3>
+                        <p class="text-xs text-slate-400" id="draft-role-description">Select 1 candidate player for this slot.</p>
+                    </div>
+                </div>
+
+                <!-- Special Power Action Buttons -->
+                <div class="flex items-center space-x-2.5 self-end md:self-auto">
+                    <!-- Reroll Power Button -->
+                    <button id="btn-power-reroll" onclick="handleRerollPower()" class="flex items-center space-x-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span>Reroll Pool (<span id="p1-reroll-count">1</span> Left)</span>
+                    </button>
+
+                    <!-- Steal Power Button -->
+                    <button id="btn-power-steal" onclick="handleStealPower()" class="flex items-center space-x-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-hand-holding-hand"></i>
+                        <span>Steal Card (<span id="p1-steal-count">1</span> Left)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Draft Interface Grid (Pitch + Candidates) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- Tactical Pitch Container (7 Cols on LG) -->
+                <div class="lg:col-span-7 glass-card p-3 sm:p-4 rounded-2xl border border-slate-800 flex flex-col">
+                    <div class="flex items-center justify-between mb-3 px-1">
+                        <span id="pitch-active-team-label" class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-futbol text-emerald-500"></i> Player 1 Tactical Pitch
+                        </span>
+                        <div class="flex items-center space-x-2">
+                            <span id="pitch-formation-tag" class="text-xs font-mono font-semibold bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-md border border-slate-700">4-3-3</span>
+                            <span id="pitch-squad-count" class="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">0/11</span>
+                        </div>
+                    </div>
+
+                    <!-- Pitch Visual Canvas -->
+                    <div id="pitch-canvas" class="relative w-full aspect-[3/4] sm:aspect-[4/5] rounded-xl overflow-hidden pitch-pattern border-2 border-emerald-900/60 shadow-2xl">
+                        <!-- Pitch Line Markings SVG Overlay -->
+                        <svg class="absolute inset-0 w-full h-full pointer-events-none stroke-white/20 fill-none" stroke-width="1.5">
+                            <rect x="3%" y="3%" width="94%" height="94%" rx="4" />
+                            <line x1="3%" y1="50%" x2="97%" y2="50%" />
+                            <circle cx="50%" cy="50%" r="15%" />
+                            <circle cx="50%" cy="50%" r="0.8%" class="fill-white/30" />
+                            <rect x="22%" y="3%" width="56%" height="16%" />
+                            <rect x="36%" y="3%" width="28%" height="6%" />
+                            <circle cx="50%" cy="13%" r="0.8%" class="fill-white/30" />
+                            <path d="M 38% 19% A 15% 15% 0 0 0 62% 19%" />
+                            <rect x="22%" y="81%" width="56%" height="16%" />
+                            <rect x="36%" y="94%" width="28%" height="6%" />
+                            <circle cx="50%" cy="87%" r="0.8%" class="fill-white/30" />
+                            <path d="M 38% 81% A 15% 15% 0 0 1 62% 81%" />
+                        </svg>
+
+                        <!-- Dynamic Pitch Slots Container -->
+                        <div id="pitch-slots-container" class="absolute inset-0">
+                            <!-- Position slots rendered via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Candidates Selection Cards (5 Cols on LG) -->
+                <div class="lg:col-span-5 space-y-4">
+                    <div class="flex items-center justify-between px-1">
+                        <h4 id="candidate-panel-title" class="text-sm font-bold text-slate-300 uppercase tracking-wider">Candidate Options</h4>
+                        <span class="text-xs text-slate-400">Click a card to pick</span>
+                    </div>
+
+                    <!-- 3 Candidate Cards List -->
+                    <div id="candidate-cards-container" class="space-y-3">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= STEP 4: HEAD-TO-HEAD BATTLE & FINAL SUMMARY ================= -->
+        <section id="step-final-breakdown" class="hidden space-y-8 animate-card-pop">
+            
+            <!-- Head to Head Match Result Banner -->
+            <div class="glass-card p-6 sm:p-8 rounded-3xl border border-slate-800 bg-gradient-to-b from-slate-900/90 to-slate-950/90 relative overflow-hidden text-center space-y-6">
+                <!-- Background Accent Glow -->
+                <div class="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 blur-3xl rounded-full pointer-events-none"></div>
+
+                <div class="relative z-10 space-y-4">
+                    <span id="final-mode-badge" class="inline-block text-xs font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">Draft Complete</span>
+                    
+                    <h2 id="final-winner-title" class="font-display font-black text-3xl sm:text-5xl text-white tracking-tight">Player 1 Wins The Battle! 🏆</h2>
+                    <p id="final-winner-subtitle" class="text-sm text-slate-400 max-w-xl mx-auto">Sensational tactical drafting victory in 11 intense positional turns.</p>
+
+                    <!-- Scoreboard Display (For PvE / PvP modes) -->
+                    <div id="battle-scoreboard-box" class="flex items-center justify-center space-x-6 sm:space-x-12 py-4">
+                        <!-- Team 1 Score -->
+                        <div class="flex flex-col items-center">
+                            <div class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-xl text-emerald-400 font-bold mb-1">
+                                <span id="sb-p1-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                            </div>
+                            <span id="sb-p1-name" class="font-display font-bold text-sm text-slate-200">Player 1</span>
+                            <span id="sb-p1-goals" class="font-mono font-black text-4xl text-emerald-400 mt-1">3</span>
+                        </div>
+
+                        <div class="font-display font-black text-2xl text-slate-500">VS</div>
+
+                        <!-- Team 2 Score -->
+                        <div class="flex flex-col items-center">
+                            <div class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-xl text-teal-400 font-bold mb-1">
+                                <span id="sb-p2-icon"><i class="fa-solid fa-robot"></i></span>
+                            </div>
+                            <span id="sb-p2-name" class="font-display font-bold text-sm text-slate-200">AI Bot</span>
+                            <span id="sb-p2-goals" class="font-mono font-black text-4xl text-teal-400 mt-1">1</span>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex items-center justify-center space-x-3 pt-2">
+                        <button onclick="copyLineupToClipboard()" class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95">
+                            <i class="fa-solid fa-copy text-emerald-400"></i>
+                            <span>Copy Summary</span>
+                        </button>
+                        <button onclick="resetToHome()" class="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-emerald-600/20 active:scale-95">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>Play Again</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team 1 & Team 2 Side-by-Side Breakdown -->
+            <div id="teams-breakdown-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Injected via JS -->
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="mt-auto border-t border-slate-900 bg-slate-950 py-4 px-4 text-center text-xs text-slate-400">
+        <p>Football Dream Team Draft &copy; 2026 • Powered by Tailwind CSS & Tone.js Audio Engine</p>
+    </footer>
+
+    <!-- STEAL POWER MODAL OVERLAY -->
+    <div id="modal-steal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-card max-w-xl w-full rounded-3xl p-6 border border-slate-800 space-y-4 animate-card-pop">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-display font-bold text-lg text-white flex items-center gap-2">
+                    <i class="fa-solid fa-hand-holding-hand text-rose-400"></i> Steal Opponent Card
+                </h3>
+                <button onclick="closeStealModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <p class="text-xs text-slate-300">Select 1 player card from your opponent's drafted XI to steal for your active slot!</p>
+
+            <div id="steal-cards-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+                <!-- JS Populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION POPUP -->
+    <div id="toast-notification" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-emerald-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl shadow-2xl flex items-center space-x-2">
+        <i class="fa-solid fa-circle-check text-lg"></i>
+        <span id="toast-message">Action successful!</span>
+    </div>
+
+    <!-- ================= JAVASCRIPT GAME LOGIC & AUDIO ENGINE ================= -->
+    <script>
+        /* ==========================================================================
+           1. CLUBS & FORMATIONS DATABASES
+           ========================================================================== */
+        const CLUBS_DATABASE = [
+            { id: 'mancity', name: 'Manchester City', short: 'MCI', color: '#6CABDD', badgeIcon: 'fa-crown', bgGradient: 'from-sky-900 to-slate-950', borderColor: 'border-sky-500/40', accentColor: 'text-sky-400' },
+            { id: 'realmadrid', name: 'Real Madrid', short: 'RMA', color: '#E5B842', badgeIcon: 'fa-shield-halved', bgGradient: 'from-amber-950 to-slate-950', borderColor: 'border-amber-500/40', accentColor: 'text-amber-400' },
+            { id: 'barcelona', name: 'FC Barcelona', short: 'BAR', color: '#A50044', badgeIcon: 'fa-shield-cat', bgGradient: 'from-rose-950 via-blue-950 to-slate-950', borderColor: 'border-rose-500/40', accentColor: 'text-rose-400' },
+            { id: 'liverpool', name: 'Liverpool FC', short: 'LIV', color: '#C8102E', badgeIcon: 'fa-fire', bgGradient: 'from-red-950 to-slate-950', borderColor: 'border-red-500/40', accentColor: 'text-red-400' },
+            { id: 'arsenal', name: 'Arsenal FC', short: 'ARS', color: '#EF0107', badgeIcon: 'fa-crosshairs', bgGradient: 'from-red-900 to-slate-950', borderColor: 'border-red-400/40', accentColor: 'text-red-400' },
+            { id: 'bayern', name: 'Bayern Munich', short: 'BAY', color: '#DC052D', badgeIcon: 'fa-gem', bgGradient: 'from-red-950 via-blue-950 to-slate-950', borderColor: 'border-red-500/40', accentColor: 'text-red-400' },
+            { id: 'psg', name: 'Paris Saint-Germain', short: 'PSG', color: '#004170', badgeIcon: 'fa-tower-observation', bgGradient: 'from-blue-950 to-slate-950', borderColor: 'border-blue-500/40', accentColor: 'text-blue-400' },
+            { id: 'chelsea', name: 'Chelsea FC', short: 'CHE', color: '#034694', badgeIcon: 'fa-lion', bgGradient: 'from-blue-900 to-slate-950', borderColor: 'border-blue-500/40', accentColor: 'text-blue-400' },
+            { id: 'manutd', name: 'Manchester United', short: 'MUN', color: '#DA020E', badgeIcon: 'fa-bolt', bgGradient: 'from-red-950 to-slate-950', borderColor: 'border-red-600/40', accentColor: 'text-red-500' }
+        ];
+
+        const FORMATIONS_DATABASE = {
+            '4-3-3': {
+                name: '4-3-3 Attack', desc: 'Balanced wing width & midfield control.',
+                positions: [
+                    { id: 'gk', title: 'GK', role: 'GK', x: 50, y: 88 },
+                    { id: 'lb', title: 'LB', role: 'DEF', x: 14, y: 70 },
+                    { id: 'lcb', title: 'LCB', role: 'DEF', x: 38, y: 74 },
+                    { id: 'rcb', title: 'RCB', role: 'DEF', x: 62, y: 74 },
+                    { id: 'rb', title: 'RB', role: 'DEF', x: 86, y: 70 },
+                    { id: 'cdm', title: 'CDM', role: 'MID', x: 50, y: 54 },
+                    { id: 'lcm', title: 'LCM', role: 'MID', x: 32, y: 44 },
+                    { id: 'rcm', title: 'RCM', role: 'MID', x: 68, y: 44 },
+                    { id: 'lw', title: 'LW', role: 'ATT', x: 20, y: 22 },
+                    { id: 'st', title: 'ST', role: 'ATT', x: 50, y: 16 },
+                    { id: 'rw', title: 'RW', role: 'ATT', x: 80, y: 22 }
+                ]
+            },
+            '4-4-2': {
+                name: '4-4-2 Classic', desc: 'Solid defensive shape with dual strikers.',
+                positions: [
+                    { id: 'gk', title: 'GK', role: 'GK', x: 50, y: 88 },
+                    { id: 'lb', title: 'LB', role: 'DEF', x: 14, y: 70 },
+                    { id: 'lcb', title: 'LCB', role: 'DEF', x: 38, y: 74 },
+                    { id: 'rcb', title: 'RCB', role: 'DEF', x: 62, y: 74 },
+                    { id: 'rb', title: 'RB', role: 'DEF', x: 86, y: 70 },
+                    { id: 'lm', title: 'LM', role: 'MID', x: 15, y: 45 },
+                    { id: 'lcm', title: 'CM', role: 'MID', x: 38, y: 48 },
+                    { id: 'rcm', title: 'CM', role: 'MID', x: 62, y: 48 },
+                    { id: 'rm', title: 'RM', role: 'MID', x: 85, y: 45 },
+                    { id: 'lst', title: 'ST', role: 'ATT', x: 36, y: 18 },
+                    { id: 'rst', title: 'ST', role: 'ATT', x: 64, y: 18 }
+                ]
+            },
+            '4-2-3-1': {
+                name: '4-2-3-1 Narrow', desc: 'Double pivot protection with attacking trio.',
+                positions: [
+                    { id: 'gk', title: 'GK', role: 'GK', x: 50, y: 88 },
+                    { id: 'lb', title: 'LB', role: 'DEF', x: 14, y: 70 },
+                    { id: 'lcb', title: 'LCB', role: 'DEF', x: 38, y: 74 },
+                    { id: 'rcb', title: 'RCB', role: 'DEF', x: 62, y: 74 },
+                    { id: 'rb', title: 'RB', role: 'DEF', x: 86, y: 70 },
+                    { id: 'ldm', title: 'CDM', role: 'MID', x: 37, y: 56 },
+                    { id: 'rdm', title: 'CDM', role: 'MID', x: 63, y: 56 },
+                    { id: 'lam', title: 'LAM', role: 'MID', x: 22, y: 35 },
+                    { id: 'cam', title: 'CAM', role: 'MID', x: 50, y: 33 },
+                    { id: 'ram', title: 'RAM', role: 'MID', x: 78, y: 35 },
+                    { id: 'st', title: 'ST', role: 'ATT', x: 50, y: 16 }
+                ]
+            },
+            '3-5-2': {
+                name: '3-5-2 Wingback', desc: 'Overloading midfield density with wingbacks.',
+                positions: [
+                    { id: 'gk', title: 'GK', role: 'GK', x: 50, y: 88 },
+                    { id: 'lcb', title: 'CB', role: 'DEF', x: 25, y: 72 },
+                    { id: 'cb', title: 'CB', role: 'DEF', x: 50, y: 75 },
+                    { id: 'rcb', title: 'CB', role: 'DEF', x: 75, y: 72 },
+                    { id: 'lwb', title: 'LWB', role: 'MID', x: 12, y: 48 },
+                    { id: 'ldm', title: 'CDM', role: 'MID', x: 37, y: 56 },
+                    { id: 'rdm', title: 'CDM', role: 'MID', x: 63, y: 56 },
+                    { id: 'rwb', title: 'RWB', role: 'MID', x: 88, y: 48 },
+                    { id: 'cam', title: 'CAM', role: 'MID', x: 50, y: 35 },
+                    { id: 'lst', title: 'ST', role: 'ATT', x: 36, y: 18 },
+                    { id: 'rst', title: 'ST', role: 'ATT', x: 64, y: 18 }
+                ]
+            }
+        };
+
+        /* ==========================================================================
+           2. PLAYER DATABASE
+           ========================================================================== */
+        const PLAYERS_DATABASE = [
+            // GK
+            { id: 1, name: 'Thibaut Courtois', shortName: 'Courtois', pos: 'GK', role: 'GK', club: 'Real Madrid', flag: '🇧🇪', ovr: 90, pac: 46, sho: 18, pas: 65, dri: 48, def: 20, phy: 86, type: 'gold' },
+            { id: 2, name: 'Alisson Becker', shortName: 'Alisson', pos: 'GK', role: 'GK', club: 'Liverpool', flag: '🇧🇷', ovr: 89, pac: 48, sho: 20, pas: 75, dri: 52, def: 18, phy: 84, type: 'gold' },
+            { id: 3, name: 'Gianluigi Donnarumma', shortName: 'Donnarumma', pos: 'GK', role: 'GK', club: 'PSG', flag: '🇮🇹', ovr: 88, pac: 45, sho: 15, pas: 60, dri: 45, def: 20, phy: 85, type: 'gold' },
+            { id: 4, name: 'Ederson Moraes', shortName: 'Ederson', pos: 'GK', role: 'GK', club: 'Man City', flag: '🇧🇷', ovr: 88, pac: 50, sho: 25, pas: 88, dri: 55, def: 15, phy: 80, type: 'gold' },
+            { id: 5, name: 'Marc-André ter Stegen', shortName: 'ter Stegen', pos: 'GK', role: 'GK', club: 'Barcelona', flag: '🇩🇪', ovr: 88, pac: 44, sho: 16, pas: 78, dri: 50, def: 18, phy: 82, type: 'gold' },
+            { id: 6, name: 'Mike Maignan', shortName: 'Maignan', pos: 'GK', role: 'GK', club: 'AC Milan', flag: '🇫🇷', ovr: 87, pac: 48, sho: 18, pas: 70, dri: 50, def: 20, phy: 83, type: 'gold' },
+            { id: 7, name: 'Manuel Neuer', shortName: 'Neuer', pos: 'GK', role: 'GK', club: 'Bayern Munich', flag: '🇩🇪', ovr: 86, pac: 45, sho: 20, pas: 82, dri: 54, def: 22, phy: 81, type: 'gold' },
+            { id: 8, name: 'Emiliano Martínez', shortName: 'E. Martínez', pos: 'GK', role: 'GK', club: 'Aston Villa', flag: '🇦🇷', ovr: 86, pac: 42, sho: 15, pas: 68, dri: 48, def: 18, phy: 85, type: 'gold' },
+            { id: 9, name: 'Loris Karius', shortName: 'Karius [Wildcard]', pos: 'GK', role: 'GK', club: 'Free Agent', flag: '🇩🇪', ovr: 72, pac: 40, sho: 10, pas: 55, dri: 40, def: 15, phy: 68, type: 'silver' },
+
+            // DEF
+            { id: 10, name: 'Virgil van Dijk', shortName: 'Van Dijk', pos: 'CB', role: 'DEF', club: 'Liverpool', flag: '🇳🇱', ovr: 89, pac: 78, sho: 60, pas: 71, dri: 72, def: 89, phy: 86, type: 'gold' },
+            { id: 11, name: 'Rúben Dias', shortName: 'R. Dias', pos: 'CB', role: 'DEF', club: 'Man City', flag: '🇵🇹', ovr: 89, pac: 62, sho: 38, pas: 68, dri: 66, def: 89, phy: 87, type: 'gold' },
+            { id: 12, name: 'Antonio Rüdiger', shortName: 'Rüdiger', pos: 'CB', role: 'DEF', club: 'Real Madrid', flag: '🇩🇪', ovr: 88, pac: 82, sho: 54, pas: 71, dri: 68, def: 86, phy: 86, type: 'gold' },
+            { id: 13, name: 'William Saliba', shortName: 'Saliba', pos: 'CB', role: 'DEF', club: 'Arsenal', flag: '🇫🇷', ovr: 87, pac: 80, sho: 40, pas: 72, dri: 71, def: 87, phy: 82, type: 'gold' },
+            { id: 14, name: 'Marquinhos', shortName: 'Marquinhos', pos: 'CB', role: 'DEF', club: 'PSG', flag: '🇧🇷', ovr: 87, pac: 78, sho: 55, pas: 74, dri: 73, def: 88, phy: 80, type: 'gold' },
+            { id: 15, name: 'Theo Hernández', shortName: 'T. Hernández', pos: 'LB', role: 'DEF', club: 'AC Milan', flag: '🇫🇷', ovr: 87, pac: 95, sho: 72, pas: 76, dri: 81, def: 80, phy: 84, type: 'gold' },
+            { id: 16, name: 'Alphonso Davies', shortName: 'A. Davies', pos: 'LB', role: 'DEF', club: 'Bayern Munich', flag: '🇨🇦', ovr: 85, pac: 96, sho: 68, pas: 77, dri: 84, def: 76, phy: 76, type: 'gold' },
+            { id: 17, name: 'Achraf Hakimi', shortName: 'Hakimi', pos: 'RB', role: 'DEF', club: 'PSG', flag: '🇲🇦', ovr: 85, pac: 92, sho: 75, pas: 80, dri: 82, def: 76, phy: 78, type: 'gold' },
+            { id: 18, name: 'Dani Carvajal', shortName: 'Carvajal', pos: 'RB', role: 'DEF', club: 'Real Madrid', flag: '🇪🇸', ovr: 86, pac: 80, sho: 58, pas: 78, dri: 79, def: 83, phy: 82, type: 'gold' },
+            { id: 19, name: 'Trent Alexander-Arnold', shortName: 'Trent A-A', pos: 'RB', role: 'DEF', club: 'Liverpool', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 86, pac: 76, sho: 71, pas: 90, dri: 80, def: 77, phy: 73, type: 'gold' },
+            { id: 20, name: 'Jeremie Frimpong', shortName: 'Frimpong', pos: 'RWB', role: 'DEF', club: 'B. Leverkusen', flag: '🇳🇱', ovr: 85, pac: 94, sho: 72, pas: 78, dri: 85, def: 74, phy: 72, type: 'gold' },
+            { id: 21, name: 'Harry Maguire', shortName: 'Maguire [Wildcard]', pos: 'CB', role: 'DEF', club: 'Man United', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 80, pac: 48, sho: 52, pas: 66, dri: 62, def: 81, phy: 86, type: 'silver' },
+
+            // MID
+            { id: 23, name: 'Rodri Hernandez', shortName: 'Rodri', pos: 'CDM', role: 'MID', club: 'Man City', flag: '🇪🇸', ovr: 91, pac: 66, sho: 74, pas: 86, dri: 84, def: 87, phy: 85, type: 'special' },
+            { id: 24, name: 'Kevin De Bruyne', shortName: 'De Bruyne', pos: 'CAM', role: 'MID', club: 'Man City', flag: '🇧🇪', ovr: 90, pac: 72, sho: 88, pas: 94, dri: 87, def: 65, phy: 78, type: 'gold' },
+            { id: 25, name: 'Jude Bellingham', shortName: 'Bellingham', pos: 'CAM', role: 'MID', club: 'Real Madrid', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 90, pac: 80, sho: 86, pas: 83, dri: 88, def: 78, phy: 84, type: 'gold' },
+            { id: 26, name: 'Federico Valverde', shortName: 'F. Valverde', pos: 'CM', role: 'MID', club: 'Real Madrid', flag: '🇺🇾', ovr: 88, pac: 88, sho: 82, pas: 84, dri: 84, def: 80, phy: 85, type: 'gold' },
+            { id: 27, name: 'Jamal Musiala', shortName: 'Musiala', pos: 'CAM', role: 'MID', club: 'Bayern Munich', flag: '🇩🇪', ovr: 88, pac: 85, sho: 78, pas: 83, dri: 92, def: 64, phy: 66, type: 'gold' },
+            { id: 28, name: 'Martin Ødegaard', shortName: 'Ødegaard', pos: 'CAM', role: 'MID', club: 'Arsenal', flag: '🇳🇴', ovr: 88, pac: 75, sho: 80, pas: 89, dri: 88, def: 63, phy: 64, type: 'gold' },
+            { id: 29, name: 'Florian Wirtz', shortName: 'Wirtz', pos: 'CAM', role: 'MID', club: 'B. Leverkusen', flag: '🇩🇪', ovr: 88, pac: 82, sho: 80, pas: 87, dri: 90, def: 52, phy: 66, type: 'gold' },
+            { id: 30, name: 'Declan Rice', shortName: 'Rice', pos: 'CDM', role: 'MID', club: 'Arsenal', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 87, pac: 74, sho: 68, pas: 82, dri: 79, def: 85, phy: 84, type: 'gold' },
+            { id: 31, name: 'Pedri González', shortName: 'Pedri', pos: 'CM', role: 'MID', club: 'Barcelona', flag: '🇪🇸', ovr: 87, pac: 78, sho: 70, pas: 86, dri: 89, def: 68, phy: 65, type: 'gold' },
+            { id: 32, name: 'Bruno Fernandes', shortName: 'Bruno F.', pos: 'CAM', role: 'MID', club: 'Man United', flag: '🇵🇹', ovr: 87, pac: 73, sho: 84, pas: 90, dri: 82, def: 68, phy: 76, type: 'gold' },
+            { id: 33, name: 'Bernardo Silva', shortName: 'Bernardo S.', pos: 'CM', role: 'MID', club: 'Man City', flag: '🇵🇹', ovr: 88, pac: 76, sho: 78, pas: 86, dri: 91, def: 66, phy: 70, type: 'gold' },
+            { id: 34, name: 'Frenkie de Jong', shortName: 'F. de Jong', pos: 'CM', role: 'MID', club: 'Barcelona', flag: '🇳🇱', ovr: 87, pac: 81, sho: 69, pas: 86, dri: 87, def: 77, phy: 78, type: 'gold' },
+            { id: 35, name: 'Cole Palmer', shortName: 'Palmer', pos: 'CAM', role: 'MID', club: 'Chelsea', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 86, pac: 81, sho: 84, pas: 85, dri: 86, def: 54, phy: 68, type: 'gold' },
+
+            // ATT
+            { id: 38, name: 'Kylian Mbappé', shortName: 'Mbappé', pos: 'ST', role: 'ATT', club: 'Real Madrid', flag: '🇫🇷', ovr: 91, pac: 97, sho: 90, pas: 80, dri: 92, def: 36, phy: 78, type: 'special' },
+            { id: 39, name: 'Erling Haaland', shortName: 'Haaland', pos: 'ST', role: 'ATT', club: 'Man City', flag: '🇳🇴', ovr: 91, pac: 89, sho: 93, pas: 66, dri: 80, def: 45, phy: 88, type: 'special' },
+            { id: 40, name: 'Vinícius Júnior', shortName: 'Vinícius Jr', pos: 'LW', role: 'ATT', club: 'Real Madrid', flag: '🇧🇷', ovr: 90, pac: 95, sho: 84, pas: 81, dri: 91, def: 29, phy: 69, type: 'gold' },
+            { id: 41, name: 'Mohamed Salah', shortName: 'Salah', pos: 'RW', role: 'ATT', club: 'Liverpool', flag: '🇪🇬', ovr: 89, pac: 89, sho: 88, pas: 82, dri: 88, def: 45, phy: 76, type: 'gold' },
+            { id: 42, name: 'Harry Kane', shortName: 'Kane', pos: 'ST', role: 'ATT', club: 'Bayern Munich', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 90, pac: 69, sho: 93, pas: 84, dri: 83, def: 48, phy: 83, type: 'gold' },
+            { id: 43, name: 'Lionel Messi', shortName: 'Messi', pos: 'RW', role: 'ATT', club: 'Inter Miami', flag: '🇦🇷', ovr: 88, pac: 79, sho: 87, pas: 90, dri: 92, def: 33, phy: 64, type: 'gold' },
+            { id: 44, name: 'Cristiano Ronaldo', shortName: 'C. Ronaldo', pos: 'ST', role: 'ATT', club: 'Al Nassr', flag: '🇵🇹', ovr: 86, pac: 77, sho: 88, pas: 75, dri: 80, def: 34, phy: 77, type: 'gold' },
+            { id: 45, name: 'Bukayo Saka', shortName: 'Saka', pos: 'RW', role: 'ATT', club: 'Arsenal', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 88, pac: 86, sho: 82, pas: 83, dri: 87, def: 65, phy: 74, type: 'gold' },
+            { id: 46, name: 'Lamine Yamal', shortName: 'Lamine Yamal', pos: 'RW', role: 'ATT', club: 'Barcelona', flag: '🇪🇸', ovr: 87, pac: 88, sho: 80, pas: 83, dri: 90, def: 35, phy: 62, type: 'gold' },
+            { id: 47, name: 'Phil Foden', shortName: 'Foden', pos: 'LW', role: 'ATT', club: 'Man City', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ovr: 88, pac: 85, sho: 84, pas: 86, dri: 89, def: 56, phy: 62, type: 'gold' },
+            { id: 48, name: 'Son Heung-min', shortName: 'Son', pos: 'LW', role: 'ATT', club: 'Tottenham', flag: '🇰🇷', ovr: 87, pac: 87, sho: 88, pas: 80, dri: 84, def: 42, phy: 70, type: 'gold' },
+            { id: 49, name: 'Lautaro Martínez', shortName: 'Lautaro M.', pos: 'ST', role: 'ATT', club: 'Inter Milan', flag: '🇦🇷', ovr: 89, pac: 82, sho: 88, pas: 75, dri: 85, def: 48, phy: 84, type: 'gold' }
+        ];
+
+        /* ==========================================================================
+           3. GLOBAL GAME STATE
+           ========================================================================== */
+        let gameState = {
+            step: 0, // 0: Mode Select, 1: Club, 2: Formation, 3: Draft Room, 4: Final Summary
+            mode: 'solo', // 'solo', 'pve', 'pvp'
+            activePlayer: 1, // 1 or 2
+            selectingClubForPlayer: 1,
+            selectingFormationForPlayer: 1,
+            
+            p1: {
+                club: null,
+                formationKey: '4-3-3',
+                formationData: null,
+                drafted: [],
+                rerollsLeft: 1,
+                stealsLeft: 1
+            },
+            p2: {
+                club: null,
+                formationKey: '4-3-3',
+                formationData: null,
+                drafted: [],
+                rerollsLeft: 1,
+                stealsLeft: 1,
+                isAI: false
+            },
+
+            currentCandidates: [],
+            audioPlaying: false
+        };
+
+        /* ==========================================================================
+           4. AUDIO ENGINE (TONE.JS + CUSTOM ANTHEM TRACK)
+           ========================================================================== */
+        let audioSynthEngine = {
+            initialized: false,
+            clickSynth: null,
+            selectSynth: null,
+            skipSynth: null,
+            whistleSynth: null,
+            crowdSynth: null,
+            anthemAudio: null
+        };
+
+        async function initToneAudio() {
+            if (audioSynthEngine.initialized) return;
+            try {
+                await Tone.start();
+                
+                audioSynthEngine.clickSynth = new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 2, envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.01 } }).toDestination();
+                audioSynthEngine.clickSynth.volume.value = -12;
+
+                audioSynthEngine.selectSynth = new Tone.PolySynth(Tone.Synth, { envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.3 } }).toDestination();
+                audioSynthEngine.selectSynth.volume.value = -8;
+
+                audioSynthEngine.skipSynth = new Tone.Synth({ oscillator: { type: 'sawtooth' }, envelope: { attack: 0.01, decay: 0.25, sustain: 0, release: 0.1 } }).toDestination();
+                audioSynthEngine.skipSynth.volume.value = -10;
+
+                audioSynthEngine.whistleSynth = new Tone.PolySynth(Tone.Synth, { envelope: { attack: 0.02, decay: 0.4, sustain: 0.3, release: 0.2 } }).toDestination();
+                audioSynthEngine.whistleSynth.volume.value = -6;
+
+                audioSynthEngine.crowdSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.3, decay: 1.2, sustain: 0.4, release: 1.5 } }).toDestination();
+                audioSynthEngine.crowdSynth.volume.value = -14;
+
+                audioSynthEngine.anthemAudio = new Audio('anthem.mp3');
+                audioSynthEngine.anthemAudio.loop = true;
+                audioSynthEngine.anthemAudio.volume = 0.5;
+
+                audioSynthEngine.initialized = true;
+            } catch (err) {
+                console.warn('Tone init postponed until click gesture:', err);
+            }
+        }
+
+        async function toggleAnthemAudio() {
+            await initToneAudio();
+            const btnText = document.getElementById('anthem-btn-text');
+            const eqIcon = document.getElementById('eq-indicator');
+            const musicIcon = document.getElementById('anthem-icon');
+
+            if (!audioSynthEngine.anthemAudio) {
+                audioSynthEngine.anthemAudio = new Audio('anthem.mp3');
+                audioSynthEngine.anthemAudio.loop = true;
+                audioSynthEngine.anthemAudio.volume = 0.5;
+            }
+
+            if (!gameState.audioPlaying) {
+                try {
+                    await audioSynthEngine.anthemAudio.play();
+                    gameState.audioPlaying = true;
+                    eqIcon.classList.remove('hidden');
+                    musicIcon.classList.add('hidden');
+                    btnText.innerText = 'Big Talk (Mute)';
+                    showToast('Now Playing: SOFY - Big Talk 🎵');
+                } catch(e) {
+                    showToast('Click again to allow anthem audio!');
+                }
+            } else {
+                audioSynthEngine.anthemAudio.pause();
+                gameState.audioPlaying = false;
+                eqIcon.classList.add('hidden');
+                musicIcon.classList.remove('hidden');
+                btnText.innerText = 'Stadium Anthem';
+                showToast('Anthem Muted 🔇');
+            }
+        }
+
+        function playClickSFX() { if (audioSynthEngine.clickSynth) audioSynthEngine.clickSynth.triggerAttackRelease('C3', '8n'); }
+        function playSelectSFX() {
+            if (audioSynthEngine.selectSynth) {
+                const now = Tone.now();
+                audioSynthEngine.selectSynth.triggerAttackRelease(['C5', 'G5'], '8n', now);
+            }
+        }
+        function playSkipSFX() {
+            if (audioSynthEngine.skipSynth) {
+                const now = Tone.now();
+                audioSynthEngine.skipSynth.triggerAttackRelease('C4', '16n', now);
+                audioSynthEngine.skipSynth.triggerAttackRelease('G4', '16n', now + 0.08);
+            }
+        }
+        function playWhistleAndCrowdSFX() {
+            if (audioSynthEngine.whistleSynth) {
+                const now = Tone.now();
+                audioSynthEngine.whistleSynth.triggerAttackRelease(['F6', 'A6'], '4n', now);
+                if (audioSynthEngine.crowdSynth) audioSynthEngine.crowdSynth.triggerAttackRelease('2s', now + 0.2);
+            }
+        }
+
+        /* ==========================================================================
+           5. UI NAVIGATION & MODE SELECTION
+           ========================================================================== */
+        document.addEventListener('DOMContentLoaded', () => {
+            renderClubsGrid();
+            renderFormationsGrid();
+            document.body.addEventListener('click', () => { initToneAudio(); }, { once: true });
+        });
+
+        function goToStep(stepNumber) {
+            playClickSFX();
+            gameState.step = stepNumber;
+
+            document.getElementById('step-mode-select').classList.add('hidden');
+            document.getElementById('step-club-select').classList.add('hidden');
+            document.getElementById('step-formation-select').classList.add('hidden');
+            document.getElementById('step-draft-room').classList.add('hidden');
+            document.getElementById('step-final-breakdown').classList.add('hidden');
+
+            const hudInfo = document.getElementById('hud-draft-info');
+
+            if (stepNumber === 0) {
+                document.getElementById('step-mode-select').classList.remove('hidden');
+                hudInfo.classList.add('hidden');
+            } else if (stepNumber === 1) {
+                document.getElementById('step-club-select').classList.remove('hidden');
+                hudInfo.classList.add('hidden');
+            } else if (stepNumber === 2) {
+                document.getElementById('step-formation-select').classList.remove('hidden');
+                hudInfo.classList.add('hidden');
+            } else if (stepNumber === 3) {
+                document.getElementById('step-draft-room').classList.remove('hidden');
+                hudInfo.classList.remove('hidden');
+            } else if (stepNumber === 4) {
+                document.getElementById('step-final-breakdown').classList.remove('hidden');
+                hudInfo.classList.remove('hidden');
+            }
+        }
+
+        function resetToHome() {
+            playClickSFX();
+            gameState.step = 0;
+            gameState.mode = 'solo';
+            gameState.activePlayer = 1;
+            gameState.p1 = { club: null, formationKey: '4-3-3', formationData: null, drafted: [], rerollsLeft: 1, stealsLeft: 1 };
+            gameState.p2 = { club: null, formationKey: '4-3-3', formationData: null, drafted: [], rerollsLeft: 1, stealsLeft: 1, isAI: false };
+            
+            goToStep(0);
+        }
+
+        function selectGameMode(modeKey) {
+            gameState.mode = modeKey;
+            const modeTag = document.getElementById('hud-game-mode-tag');
+
+            if (modeKey === 'solo') {
+                modeTag.innerText = 'Solo Manager';
+                gameState.p2.isAI = false;
+                gameState.selectingClubForPlayer = 1;
+                document.getElementById('club-select-title').innerText = 'Select Your Club Identity';
+                document.getElementById('club-select-subtitle').innerText = 'Choose a legendary European football club.';
+                goToStep(1);
+            } else if (modeKey === 'pve') {
+                modeTag.innerText = 'Player vs AI (PvE)';
+                gameState.p2.isAI = true;
+                // AI selects a random club & formation automatically
+                const randClub = CLUBS_DATABASE[Math.floor(Math.random() * CLUBS_DATABASE.length)];
+                const formKeys = Object.keys(FORMATIONS_DATABASE);
+                const randFormKey = formKeys[Math.floor(Math.random() * formKeys.length)];
+
+                gameState.p2.club = randClub;
+                gameState.p2.formationKey = randFormKey;
+                gameState.p2.formationData = FORMATIONS_DATABASE[randFormKey];
+
+                gameState.selectingClubForPlayer = 1;
+                document.getElementById('club-select-title').innerText = 'Player 1: Select Club';
+                document.getElementById('club-select-subtitle').innerText = 'Choose your club identity to battle the AI Bot.';
+                goToStep(1);
+            } else if (modeKey === 'pvp') {
+                modeTag.innerText = '1v1 PvP Battle';
+                gameState.p2.isAI = false;
+                gameState.selectingClubForPlayer = 1;
+                document.getElementById('club-select-title').innerText = 'Player 1: Select Club';
+                document.getElementById('club-select-subtitle').innerText = 'Player 1 chooses club identity.';
+                goToStep(1);
+            }
+        }
+
+        /* --- STEP 1: CLUBS --- */
+        function renderClubsGrid() {
+            const container = document.getElementById('clubs-grid');
+            container.innerHTML = CLUBS_DATABASE.map(club => `
+                <div onclick="selectClub('${club.id}')" 
+                     class="glass-card glass-card-hover rounded-2xl p-5 cursor-pointer transition-all duration-300 border ${club.borderColor} relative overflow-hidden group">
+                    <div class="absolute -right-8 -bottom-8 text-7xl opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all ${club.accentColor}">
+                        <i class="fa-solid ${club.badgeIcon}"></i>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br ${club.bgGradient} border border-white/10 flex items-center justify-center text-2xl shadow-lg ${club.accentColor}">
+                            <i class="fa-solid ${club.badgeIcon}"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-display font-extrabold text-lg text-white group-hover:text-emerald-400 transition-colors">${club.name}</h3>
+                            <span class="text-xs text-slate-400 font-mono uppercase tracking-wider">${club.short} Identity</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectClub(clubId) {
+            const club = CLUBS_DATABASE.find(c => c.id === clubId);
+            
+            if (gameState.selectingClubForPlayer === 1) {
+                gameState.p1.club = club;
+                if (gameState.mode === 'pvp') {
+                    // Ask Player 2 for Club
+                    gameState.selectingClubForPlayer = 2;
+                    document.getElementById('club-select-title').innerText = 'Player 2: Select Club';
+                    document.getElementById('club-select-subtitle').innerText = 'Player 2 chooses club identity.';
+                    showToast('Player 1 Club set! Player 2, pick your club.');
+                    return;
+                }
+            } else {
+                gameState.p2.club = club;
+            }
+
+            // Proceed to Formations
+            gameState.selectingFormationForPlayer = 1;
+            document.getElementById('formation-select-title').innerText = gameState.mode === 'solo' ? 'Choose Tactical Formation' : 'Player 1: Choose Formation';
+            goToStep(2);
+        }
+
+        /* --- STEP 2: FORMATIONS --- */
+        function renderFormationsGrid() {
+            const container = document.getElementById('formations-grid');
+            container.innerHTML = Object.keys(FORMATIONS_DATABASE).map(key => {
+                const f = FORMATIONS_DATABASE[key];
+                return `
+                    <div onclick="selectFormation('${key}')" 
+                         class="glass-card glass-card-hover rounded-2xl p-5 cursor-pointer transition-all duration-300 border border-slate-800 flex flex-col justify-between group">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-display font-black text-xl text-white group-hover:text-emerald-400">${key}</h3>
+                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Tactics</span>
+                            </div>
+                            <h4 class="font-semibold text-xs text-slate-200">${f.name}</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">${f.desc}</p>
+                        </div>
+                        
+                        <div class="mt-4 aspect-[4/3] rounded-xl pitch-pattern relative border border-emerald-900/50 overflow-hidden">
+                            ${f.positions.map(pos => `
+                                <div class="absolute w-2.5 h-2.5 bg-emerald-400 rounded-full border border-slate-950 shadow-sm"
+                                     style="left: ${pos.x}%; top: ${pos.y}%; transform: translate(-50%, -50%);"></div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectFormation(formationKey) {
+            if (gameState.selectingFormationForPlayer === 1) {
+                gameState.p1.formationKey = formationKey;
+                gameState.p1.formationData = FORMATIONS_DATABASE[formationKey];
+
+                if (gameState.mode === 'pvp') {
+                    // Player 2 selects formation
+                    gameState.selectingFormationForPlayer = 2;
+                    document.getElementById('formation-select-title').innerText = 'Player 2: Choose Formation';
+                    showToast('Player 1 Formation set! Player 2, pick your formation.');
+                    return;
+                }
+            } else {
+                gameState.p2.formationKey = formationKey;
+                gameState.p2.formationData = FORMATIONS_DATABASE[formationKey];
+            }
+
+            // Start Draft Room!
+            gameState.activePlayer = 1;
+            goToStep(3);
+            startDraftTurn();
+        }
+
+        /* ==========================================================================
+           6. STEP 3: TURN-BASED DRAFT ENGINE & SPECIAL POWERS
+           ========================================================================== */
+        function startDraftTurn() {
+            // Check if draft is completed for both
+            if (gameState.p1.drafted.length >= 11 && (gameState.mode === 'solo' || gameState.p2.drafted.length >= 11)) {
+                finishDraftAndScore();
+                return;
+            }
+
+            // If active player already has 11 cards, switch active turn to other player
+            let p = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+            if (p.drafted.length >= 11 && gameState.mode !== 'solo') {
+                gameState.activePlayer = gameState.activePlayer === 1 ? 2 : 1;
+                p = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+            }
+
+            const currentIdx = Math.min(p.drafted.length, 10);
+            const currentPos = p.formationData.positions[currentIdx];
+
+            if (!currentPos) {
+                finishDraftAndScore();
+                return;
+            }
+
+            // Update Turn Badge HUD
+            const turnBadge = document.getElementById('turn-badge');
+            const turnText = document.getElementById('turn-text');
+
+            if (gameState.mode === 'solo') {
+                turnBadge.className = 'flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-1.5';
+                turnText.innerText = 'Solo Manager Draft';
+                turnText.className = 'font-display font-bold text-xs sm:text-sm text-emerald-400';
+            } else if (gameState.activePlayer === 1) {
+                turnBadge.className = 'flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/40 rounded-xl px-3 py-1.5';
+                turnText.innerText = 'Player 1\'s Turn';
+                turnText.className = 'font-display font-bold text-xs sm:text-sm text-emerald-400';
+            } else {
+                turnBadge.className = 'flex items-center space-x-2 bg-teal-500/10 border border-teal-500/40 rounded-xl px-3 py-1.5';
+                turnText.innerText = gameState.p2.isAI ? 'AI Bot is thinking...' : 'Player 2\'s Turn';
+                turnText.className = 'font-display font-bold text-xs sm:text-sm text-teal-400';
+            }
+
+            document.getElementById('draft-current-index').innerText = currentIdx + 1;
+            document.getElementById('draft-target-pos').innerText = `${currentPos.title} (${currentPos.role})`;
+            document.getElementById('draft-role-description').innerText = `${gameState.activePlayer === 1 ? 'Player 1' : (gameState.p2.isAI ? 'AI Bot' : 'Player 2')} selecting ${currentPos.role} candidate.`;
+
+            document.getElementById('pitch-active-team-label').innerText = `${gameState.activePlayer === 1 ? gameState.p1.club.name : gameState.p2.club.name} Tactical Pitch`;
+            document.getElementById('pitch-formation-tag').innerText = p.formationKey;
+            document.getElementById('pitch-squad-count').innerText = `${p.drafted.length}/11`;
+
+            // Update Power Buttons
+            document.getElementById('p1-reroll-count').innerText = p.rerollsLeft;
+            document.getElementById('p1-steal-count').innerText = p.stealsLeft;
+            
+            document.getElementById('btn-power-reroll').disabled = (p.rerollsLeft <= 0);
+            
+            // Steal button enabled only if opponent has drafted at least 1 player
+            const opp = gameState.activePlayer === 1 ? gameState.p2 : gameState.p1;
+            document.getElementById('btn-power-steal').disabled = (p.stealsLeft <= 0 || opp.drafted.length === 0 || gameState.mode === 'solo');
+
+            // Render Pitch Slots & Candidates
+            renderPitchSlots();
+            generateCandidates(currentPos.role);
+
+            // If AI's turn, execute AI Bot decision after brief delay!
+            if (gameState.activePlayer === 2 && gameState.p2.isAI) {
+                setTimeout(() => { executeAIBotTurn(); }, 1200);
+            }
+        }
+
+        function renderPitchSlots() {
+            const container = document.getElementById('pitch-slots-container');
+            const p = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+            const positions = p.formationData.positions;
+
+            container.innerHTML = positions.map((pos, idx) => {
+                const isDrafted = idx < p.drafted.length;
+                const isActive = idx === p.drafted.length;
+                const drafted = isDrafted ? p.drafted[idx] : null;
+
+                if (isDrafted && drafted) {
+                    const card = drafted.player;
+                    return `
+                        <div class="absolute pitch-slot transition-all duration-300" style="left: ${pos.x}%; top: ${pos.y}%;">
+                            <div class="flex flex-col items-center">
+                                <div class="bg-slate-900/90 border border-emerald-500/80 rounded-lg px-2 py-1 flex items-center space-x-1.5 shadow-lg">
+                                    <span class="text-xs">${card.flag}</span>
+                                    <span class="font-mono font-bold text-xs text-amber-400">${card.ovr}</span>
+                                    <span class="font-display font-bold text-[11px] text-white max-w-[65px] truncate">${card.shortName}</span>
+                                </div>
+                                <span class="text-[9px] font-mono font-semibold bg-emerald-950 text-emerald-400 px-1.5 rounded border border-emerald-800 -mt-1 z-10">${pos.title}</span>
+                            </div>
+                        </div>
+                    `;
+                } else if (isActive) {
+                    return `
+                        <div class="absolute pitch-slot transition-all duration-300 z-20" style="left: ${pos.x}%; top: ${pos.y}%;">
+                            <div class="flex flex-col items-center">
+                                <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center animate-pulse-glow">
+                                    <span class="font-display font-black text-xs sm:text-sm text-emerald-300">${pos.title}</span>
+                                </div>
+                                <span class="mt-1 text-[9px] font-bold uppercase tracking-wider text-emerald-300 bg-slate-950 px-2 py-0.5 rounded-full border border-emerald-500/40">Active</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="absolute pitch-slot opacity-40 transition-all duration-300" style="left: ${pos.x}%; top: ${pos.y}%;">
+                            <div class="w-7 h-7 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+                                <span class="font-mono text-[10px] text-slate-400 font-bold">${pos.title}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        function generateCandidates(role) {
+            // Exclude cards already drafted by either P1 or P2
+            const usedIds = new Set([...gameState.p1.drafted.map(d => d.player.id), ...gameState.p2.drafted.map(d => d.player.id)]);
+            
+            let eligible = PLAYERS_DATABASE.filter(p => p.role === role && !usedIds.has(p.id));
+            if (eligible.length < 3) eligible = PLAYERS_DATABASE.filter(p => !usedIds.has(p.id));
+
+            const shuffled = [...eligible].sort(() => 0.5 - Math.random());
+            gameState.currentCandidates = shuffled.slice(0, 3);
+
+            renderCandidateCards();
+        }
+
+        function renderCandidateCards() {
+            const container = document.getElementById('candidate-cards-container');
+            container.innerHTML = gameState.currentCandidates.map((player, idx) => {
+                let cardClass = player.type === 'silver' ? 'fut-card-silver' : (player.type === 'special' ? 'fut-card-special' : 'fut-card-gold');
+
+                return `
+                    <div onclick="selectCandidateCard(${idx})" 
+                         class="fut-card ${cardClass} rounded-2xl p-4 cursor-pointer relative overflow-hidden group animate-card-pop">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xl">${player.flag}</span>
+                                <span class="font-mono text-xs font-bold text-slate-300 bg-slate-950/60 px-2 py-0.5 rounded border border-slate-700">${player.pos}</span>
+                            </div>
+                            <span class="font-display font-black text-2xl text-amber-400 drop-shadow">${player.ovr}</span>
+                        </div>
+
+                        <div class="mb-3">
+                            <h4 class="font-display font-black text-lg text-white group-hover:text-emerald-400 transition-colors">${player.name}</h4>
+                            <p class="text-xs text-slate-300 font-medium">${player.club}</p>
+                        </div>
+
+                        <div class="grid grid-cols-6 gap-1 bg-slate-950/80 border border-slate-800 rounded-xl p-2 text-center text-[10px] font-mono">
+                            <div><span class="text-slate-400 block">PAC</span><span class="font-bold text-slate-200">${player.pac}</span></div>
+                            <div><span class="text-slate-400 block">SHO</span><span class="font-bold text-slate-200">${player.sho}</span></div>
+                            <div><span class="text-slate-400 block">PAS</span><span class="font-bold text-slate-200">${player.pas}</span></div>
+                            <div><span class="text-slate-400 block">DRI</span><span class="font-bold text-slate-200">${player.dri}</span></div>
+                            <div><span class="text-slate-400 block">DEF</span><span class="font-bold text-slate-200">${player.def}</span></div>
+                            <div><span class="text-slate-400 block">PHY</span><span class="font-bold text-slate-200">${player.phy}</span></div>
+                        </div>
+
+                        <div class="mt-3 flex items-center justify-end text-xs text-emerald-400 font-bold group-hover:translate-x-1 transition-transform">
+                            <span>Draft Player</span> <i class="fa-solid fa-chevron-right ml-1"></i>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectCandidateCard(index) {
+            playSelectSFX();
+            const p = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+
+            if (p.drafted.length >= 11) {
+                startDraftTurn();
+                return;
+            }
+
+            const chosenPlayer = gameState.currentCandidates[index];
+            const currentPos = p.formationData.positions[p.drafted.length];
+
+            if (currentPos) {
+                p.drafted.push({
+                    positionTitle: currentPos.title,
+                    role: currentPos.role,
+                    x: currentPos.x,
+                    y: currentPos.y,
+                    player: chosenPlayer
+                });
+            }
+
+            // Alternate Turn in PvP / PvE modes
+            if (gameState.mode !== 'solo') {
+                gameState.activePlayer = gameState.activePlayer === 1 ? 2 : 1;
+            }
+
+            startDraftTurn();
+        }
+
+        /* --- SPECIAL POWERS: REROLL & STEAL --- */
+        function handleRerollPower() {
+            const p = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+            if (p.rerollsLeft <= 0) return;
+
+            playSkipSFX();
+            p.rerollsLeft--;
+
+            const currentPos = p.formationData.positions[p.drafted.length];
+            generateCandidates(currentPos.role);
+
+            showToast(`${gameState.activePlayer === 1 ? 'Player 1' : 'Player 2'} used Reroll Power! 🔄`);
+            document.getElementById('p1-reroll-count').innerText = p.rerollsLeft;
+            document.getElementById('btn-power-reroll').disabled = true;
+        }
+
+        function handleStealPower() {
+            const p = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+            const opp = gameState.activePlayer === 1 ? gameState.p2 : gameState.p1;
+            if (p.stealsLeft <= 0 || opp.drafted.length === 0) return;
+
+            // Render Steal Options Modal
+            const container = document.getElementById('steal-cards-list');
+            container.innerHTML = opp.drafted.map((d, idx) => `
+                <div onclick="executeStealCard(${idx})" 
+                     class="bg-slate-900 border border-slate-700 hover:border-rose-500 p-3 rounded-xl cursor-pointer flex items-center justify-between group transition-all">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xl">${d.player.flag}</span>
+                        <div>
+                            <div class="font-bold text-sm text-white group-hover:text-rose-400">${d.player.name}</div>
+                            <div class="text-xs text-slate-400">${d.positionTitle} • ${d.player.club}</div>
+                        </div>
+                    </div>
+                    <span class="font-mono font-black text-amber-400 text-base">${d.player.ovr} OVR</span>
+                </div>
+            `).join('');
+
+            document.getElementById('modal-steal').classList.remove('hidden');
+        }
+
+        function executeStealCard(stolenIndex) {
+            const p = gameState.activePlayer === 1 ? gameState.p1 : gameState.p2;
+            const opp = gameState.activePlayer === 1 ? gameState.p2 : gameState.p1;
+            
+            if (p.stealsLeft <= 0 || opp.drafted.length === 0 || p.drafted.length >= 11) return;
+
+            p.stealsLeft--;
+            closeStealModal();
+            playSelectSFX();
+
+            // 1. Remove stolen card from opponent
+            const stolenItem = opp.drafted.splice(stolenIndex, 1)[0];
+            const currentPos = p.formationData.positions[p.drafted.length];
+
+            // 2. Add stolen card to active player's XI
+            if (currentPos) {
+                p.drafted.push({
+                    positionTitle: currentPos.title,
+                    role: currentPos.role,
+                    x: currentPos.x,
+                    y: currentPos.y,
+                    player: stolenItem.player
+                });
+            }
+
+            // 3. Assign a replacement card to opponent so opponent squad size stays balanced
+            if (opp.drafted.length < 11) {
+                const oppPos = opp.formationData.positions[opp.drafted.length];
+                const usedIds = new Set([...gameState.p1.drafted.map(d => d.player.id), ...gameState.p2.drafted.map(d => d.player.id)]);
+                let eligible = PLAYERS_DATABASE.filter(card => card.role === oppPos.role && !usedIds.has(card.id));
+                if (eligible.length === 0) eligible = PLAYERS_DATABASE.filter(card => !usedIds.has(card.id));
+                const replacementPlayer = eligible[Math.floor(Math.random() * eligible.length)];
+
+                if (replacementPlayer) {
+                    opp.drafted.push({
+                        positionTitle: oppPos.title,
+                        role: oppPos.role,
+                        x: oppPos.x,
+                        y: oppPos.y,
+                        player: replacementPlayer
+                    });
+                }
+            }
+
+            showToast(`STOLEN! ${stolenItem.player.name} (${stolenItem.player.ovr} OVR) added to team! 🃏`);
+
+            if (gameState.mode !== 'solo') {
+                gameState.activePlayer = gameState.activePlayer === 1 ? 2 : 1;
+            }
+            startDraftTurn();
+        }
+
+        function closeStealModal() {
+            document.getElementById('modal-steal').classList.add('hidden');
+        }
+
+        /* --- AI BOT ENGINE (PvE MODE) --- */
+        function executeAIBotTurn() {
+            const p2 = gameState.p2;
+            const currentPos = p2.formationData.positions[p2.drafted.length];
+
+            // AI Decision: Pick highest OVR candidate
+            let bestCandidateIdx = 0;
+            let highestOvr = -1;
+
+            gameState.currentCandidates.forEach((cand, idx) => {
+                if (cand.ovr > highestOvr) {
+                    highestOvr = cand.ovr;
+                    bestCandidateIdx = idx;
+                }
+            });
+
+            // AI Steal logic: If P1 has a 90+ star player and AI hasn't used Steal yet
+            if (p2.stealsLeft > 0 && gameState.p1.drafted.length > 0 && Math.random() > 0.6) {
+                const p1Star = gameState.p1.drafted.findIndex(d => d.player.ovr >= 90);
+                if (p1Star !== -1) {
+                    // AI Steals Star Player!
+                    p2.stealsLeft--;
+                    const stolenItem = gameState.p1.drafted.splice(p1Star, 1)[0];
+                    p2.drafted.push({
+                        positionTitle: currentPos.title,
+                        role: currentPos.role,
+                        x: currentPos.x,
+                        y: currentPos.y,
+                        player: stolenItem.player
+                    });
+
+                    showToast(`AI Bot STOLE ${stolenItem.player.name} (${stolenItem.player.ovr} OVR)! 🤖⚡`);
+                    playSelectSFX();
+                    gameState.activePlayer = 1;
+                    startDraftTurn();
+                    return;
+                }
+            }
+
+            // Normal AI candidate pick
+            selectCandidateCard(bestCandidateIdx);
+        }
+
+        /* ==========================================================================
+           7. STEP 4: HEAD-TO-HEAD ENDGAME MATCH SCORING & WINNER DECLARATION
+           ========================================================================== */
+        function finishDraftAndScore() {
+            playWhistleAndCrowdSFX();
+            goToStep(4);
+
+            const p1 = gameState.p1;
+            const p2 = gameState.p2;
+
+            const p1Ovr = Math.round(p1.drafted.reduce((s, d) => s + d.player.ovr, 0) / 11);
+            const p1Att = Math.round(p1.drafted.filter(d => d.role === 'ATT').reduce((s, d) => s + d.player.ovr, 0) / (p1.drafted.filter(d => d.role === 'ATT').length || 1));
+            const p1Def = Math.round(p1.drafted.filter(d => d.role === 'DEF' || d.role === 'GK').reduce((s, d) => s + d.player.ovr, 0) / (p1.drafted.filter(d => d.role === 'DEF' || d.role === 'GK').length || 1));
+
+            let p2Ovr = 0, p2Att = 0, p2Def = 0;
+            if (gameState.mode !== 'solo') {
+                p2Ovr = Math.round(p2.drafted.reduce((s, d) => s + d.player.ovr, 0) / 11);
+                p2Att = Math.round(p2.drafted.filter(d => d.role === 'ATT').reduce((s, d) => s + d.player.ovr, 0) / (p2.drafted.filter(d => d.role === 'ATT').length || 1));
+                p2Def = Math.round(p2.drafted.filter(d => d.role === 'DEF' || d.role === 'GK').reduce((s, d) => s + d.player.ovr, 0) / (p2.drafted.filter(d => d.role === 'DEF' || d.role === 'GK').length || 1));
+            }
+
+            // Calculate Match Score
+            let p1Goals = 0;
+            let p2Goals = 0;
+
+            if (gameState.mode === 'solo') {
+                p1Goals = p1Ovr >= 88 ? 4 : (p1Ovr >= 85 ? 3 : 2);
+                p2Goals = 1;
+            } else {
+                // Head-to-Head Formula: Attack vs Defense duels + OVR bonus
+                p1Goals = Math.max(0, Math.floor((p1Att - p2Def) / 3) + (p1Ovr > p2Ovr ? 2 : 1));
+                p2Goals = Math.max(0, Math.floor((p2Att - p1Def) / 3) + (p2Ovr > p1Ovr ? 2 : 1));
+
+                if (p1Goals === p2Goals) {
+                    // Tie-breaker penalty shootout win
+                    if (p1Ovr >= p2Ovr) p1Goals++;
+                    else p2Goals++;
+                }
+            }
+
+            // Update Winner Banner & Scoreboard
+            const winnerTitle = document.getElementById('final-winner-title');
+            const winnerSubtitle = document.getElementById('final-winner-subtitle');
+
+            document.getElementById('sb-p1-name').innerText = p1.club.name;
+            document.getElementById('sb-p1-goals').innerText = p1Goals;
+
+            if (gameState.mode !== 'solo') {
+                document.getElementById('sb-p2-name').innerText = p2.club.name;
+                document.getElementById('sb-p2-goals').innerText = p2Goals;
+                document.getElementById('battle-scoreboard-box').classList.remove('hidden');
+
+                if (p1Goals > p2Goals) {
+                    winnerTitle.innerText = `${p1.club.name} Wins The Battle! 🏆`;
+                    winnerSubtitle.innerText = `Sensational ${p1Goals} - ${p2Goals} victory over ${p2.club.name}!`;
+                } else {
+                    winnerTitle.innerText = `${p2.club.name} Claims Victory! 🏆`;
+                    winnerSubtitle.innerText = `Tough loss! ${p2.club.name} defeated ${p1.club.name} ${p2Goals} - ${p1Goals}.`;
+                }
+            } else {
+                document.getElementById('battle-scoreboard-box').classList.add('hidden');
+                winnerTitle.innerText = `${p1.club.name} Champion XI Created! 🏆`;
+                winnerSubtitle.innerText = `Average Squad Rating: ${p1Ovr} OVR across all 11 tactical slots.`;
+            }
+
+            // Render Side-by-Side Team Summaries
+            renderTeamsBreakdown(p1, p2, p1Ovr, p2Ovr);
+        }
+
+        function renderTeamsBreakdown(p1, p2, p1Ovr, p2Ovr) {
+            const container = document.getElementById('teams-breakdown-container');
+            
+            let html = `
+                <!-- Team 1 Breakdown Card -->
+                <div class="glass-card p-5 rounded-3xl border border-emerald-500/40 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl text-emerald-400"><i class="fa-solid ${p1.club.badgeIcon}"></i></span>
+                            <div>
+                                <h3 class="font-display font-black text-lg text-white">${p1.club.name}</h3>
+                                <p class="text-xs text-slate-400">${p1.formationKey} Formation</p>
+                            </div>
+                        </div>
+                        <span class="font-mono font-black text-2xl text-emerald-400">${p1Ovr} OVR</span>
+                    </div>
+
+                    <!-- Squad Roster List -->
+                    <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                        ${p1.drafted.map(d => `
+                            <div class="bg-slate-900/80 border border-slate-800 p-2 rounded-xl flex items-center justify-between text-xs">
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-mono font-bold text-emerald-400 w-8">${d.positionTitle}</span>
+                                    <span>${d.player.flag}</span>
+                                    <span class="font-bold text-slate-200">${d.player.name}</span>
+                                </div>
+                                <span class="font-mono font-bold text-amber-400">${d.player.ovr}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            if (gameState.mode !== 'solo') {
+                html += `
+                    <!-- Team 2 Breakdown Card -->
+                    <div class="glass-card p-5 rounded-3xl border border-teal-500/40 space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-2xl text-teal-400"><i class="fa-solid ${p2.club.badgeIcon}"></i></span>
+                                <div>
+                                    <h3 class="font-display font-black text-lg text-white">${p2.club.name} ${p2.isAI ? '(AI Bot)' : ''}</h3>
+                                    <p class="text-xs text-slate-400">${p2.formationKey} Formation</p>
+                                </div>
+                            </div>
+                            <span class="font-mono font-black text-2xl text-teal-400">${p2Ovr} OVR</span>
+                        </div>
+
+                        <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                            ${p2.drafted.map(d => `
+                                <div class="bg-slate-900/80 border border-slate-800 p-2 rounded-xl flex items-center justify-between text-xs">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-mono font-bold text-teal-400 w-8">${d.positionTitle}</span>
+                                        <span>${d.player.flag}</span>
+                                        <span class="font-bold text-slate-200">${d.player.name}</span>
+                                    </div>
+                                    <span class="font-mono font-bold text-amber-400">${d.player.ovr}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function copyLineupToClipboard() {
+            playClickSFX();
+            let text = `⚽ FOOTBALL DREAM TEAM DRAFT BATTLE ⚽\n`;
+            text += `Mode: ${gameState.mode.toUpperCase()}\n`;
+            text += `Team 1: ${gameState.p1.club.name} (${gameState.p1.formationKey})\n`;
+            if (gameState.mode !== 'solo') text += `Team 2: ${gameState.p2.club.name} (${gameState.p2.formationKey})\n`;
+            text += `\nBuilt with Football Dream Team Draft Engine!`;
+
+            navigator.clipboard.writeText(text).then(() => { showToast('Match summary copied to clipboard! 📋'); });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast-notification');
+            const toastMsg = document.getElementById('toast-message');
+            toastMsg.innerText = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
